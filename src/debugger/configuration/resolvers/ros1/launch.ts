@@ -324,7 +324,8 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
                                 description: "Enable pretty-printing for gdb",
                                 ignoreFailures: true
                             }
-                        ]
+                        ],
+                        "MIMode": "lldb"
                     };
                     debugConfig = cppdbgLaunchConfig;
                 }
