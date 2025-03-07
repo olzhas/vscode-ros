@@ -70,6 +70,13 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
                     request: "attach",
                     program: config.commandLine,
                     processId: config.processId,
+                    setupCommands: [
+                        {
+                            text: "-enable-pretty-printing",
+                            description: "Enable pretty-printing for gdb",
+                            ignoreFailures: true
+                        }
+                    ]
                 };
                 debugConfig = cppdbgAttachConfig;
             }
@@ -81,7 +88,7 @@ export class AttachResolver implements vscode.DebugConfigurationProvider {
             try {
                 if (os.platform() === "win32") {
                     const processOptions: child_process.ExecOptions = {
-                        cwd: extension.baseDir,
+                        cwd: vscode.workspace.rootPath,
                         env: await extension.resolvedEnv(),
                     };
 

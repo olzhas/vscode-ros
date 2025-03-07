@@ -45,7 +45,7 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
         // Manage the status of the ROS core, starting one if not present
         // The ROS core will continue to run until the VSCode window is closed
         if (await rosApi.getCoreStatus() == false) {
-            console.log("ROS Core is not active, attempting to start automatically");
+            extension.outputChannel.appendLine("ROS Core is not active, attempting to start automatically");
             rosApi.startCore();
 
             // Wait for the core to start up to a timeout
@@ -58,7 +58,7 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
                 await delay(interval_ms);
             }
 
-            console.log("Waited " + timeWaited + " for ROS Core to start");
+            extension.outputChannel.appendLine("Waited " + timeWaited + " for ROS Core to start");
 
             if (timeWaited >= timeout_ms) {
                 throw new Error('Timed out (' + timeWaited / 1000 + ' seconds) waiting for ROS Core to start. Start ROSCore manually to avoid this error.');
@@ -69,11 +69,18 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             env: await extension.resolvedEnv(),
         };
 
-        let result = await promisifiedExec(`roslaunch --dump-params ${config.target}`, rosExecOptions);
+        // If the configuration has arguments,
+        let configArgs :string = "";
+        if (config.arguments)
+        {
+            configArgs = config.arguments.join(' ');
+        }
+
+        let result = await promisifiedExec(`roslaunch --dump-params ${config.target} ${configArgs}`, rosExecOptions);
         if (result.stderr) {
             throw (new Error(`Error from roslaunch:\r\n ${result.stderr}`));
         } else if (result.stdout.length == 0) {
-            throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target}\" in a ros terminal.`));
+            throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target} ${configArgs}\" in a ros terminal.`));
         }
 
 
@@ -90,16 +97,16 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
             });
         }
 
-        result = await promisifiedExec(`roslaunch --nodes ${config.target}`, rosExecOptions);
+        result = await promisifiedExec(`roslaunch --nodes ${config.target} ${configArgs}`, rosExecOptions);
         if (result.stderr) {
             throw (new Error(`Error from roslaunch:\r\n ${result.stderr}`));
         } else if (result.stdout.length == 0) {
-            throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target}\" in a ros terminal.`));
+            throw (new Error(`roslaunch unexpectedly produced no output, please test by running \"roslaunch --dump-params ${config.target} ${configArgs}\" in a ros terminal.`));
         }
 
         const nodes = result.stdout.trim().split(os.EOL);
         await Promise.all(nodes.map((node: string) => {
-            return promisifiedExec(`roslaunch --args ${node} ${config.target}`, rosExecOptions);
+            return promisifiedExec(`roslaunch --args ${node} ${config.target} ${configArgs}`, rosExecOptions);
         })).then((commands: Array<{ stdout: string; stderr: string; }>) => {
             commands.forEach(async (command, index) => {
                 const launchRequest = this.generateLaunchRequest(nodes[index], command.stdout, config);
@@ -158,11 +165,21 @@ export class LaunchResolver implements vscode.DebugConfigurationProvider {
 
         // return rviz instead of rviz.exe, or spawner instead of spawner.py
          // This allows the user to run filter out genericly. 
-         let executableName = path.basename(executable, path.extname(executable));
+        let executableName = path.basename(executable, path.extname(executable));
+
+
 
         // If this executable is just launched, don't attach a debugger.
         if (config.launch && 
             config.launch.indexOf(executableName) != -1) {
+          return null;
+        }
+
+        // Filter shell scripts - just launch them
+        //  https://github.com/ms-iot/vscode-ros/issues/474 
+        let executableExt = path.extname(executable);
+        if (executableExt && 
+            ["bash", "sh", "bat", "cmd", "ps1"].includes(executableExt)) {
           return null;
         }
 

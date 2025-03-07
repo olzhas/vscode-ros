@@ -13,7 +13,6 @@ from typing import List
 from typing import Text
 from typing import Tuple
 from typing import Union
-from typing import OrderedDict
 
 from ament_index_python.packages import get_package_prefix
 from ament_index_python.packages import PackageNotFoundError
@@ -35,11 +34,12 @@ from launch.actions import IncludeLaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.launch_context import LaunchContext
 from launch_ros.actions import PushRosNamespace
+from launch_ros.ros_adapters import get_ros_adapter
 
 
 def parse_launch_arguments(launch_arguments: List[Text]) -> List[Tuple[Text, Text]]:
     """Parse the given launch arguments from the command line, into list of tuples for launch."""
-    parsed_launch_arguments = OrderedDict()  # type: ignore
+    parsed_launch_arguments = {}  # type: ignore; 3.7+ dict is ordered.
     for argument in launch_arguments:
         count = argument.count(':=')
         if count == 0 or argument.startswith(':=') or (count == 1 and argument.endswith(':=')):
@@ -113,11 +113,14 @@ if __name__ == "__main__":
             if visit_future is not None:
                 visit_future.reverse()
                 walker.extend(visit_future)
+
+                   
             if is_a(entity, ExecuteProcess):
                 typed_action = cast(ExecuteProcess, entity)
                 if typed_action.process_details is not None:
                     sys.stdout = sys.__stdout__
-                    commands = []
+                        # Prefix this with a tab character so the caller knows this is a line to be processed.
+                    commands = ['\t']
                     for cmd in typed_action.process_details['cmd']:
                         if cmd.strip():
                             commands.extend(['"{}"'.format(cmd.strip())])
@@ -125,5 +128,21 @@ if __name__ == "__main__":
                         commands[0] = '"{}"'.format(find_files(typed_action.process_details['cmd'][0]))
                     print(' '.join(commands))
                     sys.stdout = mystring
+
+            # Lifecycle node support
+            # https://github.com/ms-iot/vscode-ros/issues/632
+            # Lifecycle nodes use a long running future to monitor the state of the nodes.
+            # cancel this task, so that we can shut down the executor in ros_adapter
+            async_future = entity.get_asyncio_future()
+            if async_future is not None:
+                async_future.cancel()
+        
     except Exception as ex:
         print(ex, file=sys.stderr)
+
+    # Shutdown the ROS Adapter 
+    # so that long running tasks shut down correctly in the debug bootstrap scenario.
+    # https://github.com/ms-iot/vscode-ros/issues/632
+    ros_adapter = get_ros_adapter(context)
+    if ros_adapter is not None:
+        ros_adapter.shutdown()

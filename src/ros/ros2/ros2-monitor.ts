@@ -10,6 +10,7 @@ import * as telemetry from "../../telemetry-helper";
 
 function getDaemonPort() {
     let basePort: number = 11511;
+    basePort += Number(process.env.ROS_DOMAIN_ID) || 0
     return basePort;
 }
 
@@ -32,7 +33,7 @@ export function launchMonitor(context: vscode.ExtensionContext) {
 
     const stylesheet = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "assets", "ros", "core-monitor", "style.css")));
 
-    const script = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "out", "src", "ros", "ros2", "webview", "main.js")));
+    const script = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "dist", "ros2_webview_main.js")));
 
     panel.webview.html = getCoreStatusWebviewContent(stylesheet, script);
 
